@@ -15,6 +15,7 @@ import {
   EXPECTED_APP_NAME,
   SUPPORTED_EXPORT_VERSION,
 } from './utils/exportFormat.js';
+import { calculateDeductibleAmount, toNumber } from './utils/calculations.js';
 
 function EmptyStatePanel({ tab }) {
   return (
@@ -76,6 +77,63 @@ export default function App() {
 
   function handleDemoDataCleared() {
     setImportedFiles((currentFiles) => currentFiles.filter((file) => !isDemoFile(file)));
+  }
+
+  function handleFileRemoved(fileId) {
+    setImportedFiles((currentFiles) => currentFiles.filter((file) => file.id !== fileId));
+  }
+
+  function handleAllImportsCleared() {
+    setImportedFiles([]);
+  }
+
+  function handleTripCorrectionSaved(trip, correction) {
+    const finalKm = toNumber(correction.finalKm, 0);
+    const mileageRate = toNumber(correction.mileageRate, 0);
+    const tripType = correction.tripType || 'zakelijk';
+
+    setImportedFiles((currentFiles) =>
+      currentFiles.map((file) => {
+        if (file.fileName !== trip.sourceFileName || !Array.isArray(file.data?.trips)) {
+          return file;
+        }
+
+        return {
+          ...file,
+          data: {
+            ...file.data,
+            trips: file.data.trips.map((sourceTrip, index) => {
+              const sameTrip =
+                index === trip.sourceTripIndex &&
+                (sourceTrip.id || '') === (trip.id || '');
+
+              if (!sameTrip) {
+                return sourceTrip;
+              }
+
+              return {
+                ...sourceTrip,
+                date: correction.date,
+                startAddress: correction.startAddress,
+                endAddress: correction.endAddress,
+                customer: correction.customer,
+                project: correction.project,
+                purpose: correction.purpose,
+                tripType,
+                finalKm,
+                manualKm: finalKm,
+                mileageRate,
+                deductibleAmount: calculateDeductibleAmount(finalKm, mileageRate, tripType),
+                status: correction.status,
+                note: correction.note,
+                localCorrection: true,
+                localCorrectionUpdatedAt: new Date().toISOString(),
+              };
+            }),
+          },
+        };
+      }),
+    );
   }
 
   return (
@@ -140,6 +198,8 @@ export default function App() {
             onFilesImported={handleFilesImported}
             onDemoFilesImported={handleDemoFilesImported}
             onDemoDataCleared={handleDemoDataCleared}
+            onFileRemoved={handleFileRemoved}
+            onAllImportsCleared={handleAllImportsCleared}
           />
         ) : activeTab === 'controle' ? (
           <ControlScreen
@@ -154,15 +214,32 @@ export default function App() {
             duplicateResult={duplicateResult}
           />
         ) : activeTab === 'ritten' ? (
-          <TripsScreen normalizedTrips={normalizedTrips} duplicateResult={duplicateResult} />
+          <TripsScreen
+            normalizedTrips={normalizedTrips}
+            duplicateResult={duplicateResult}
+            onTripCorrectionSaved={handleTripCorrectionSaved}
+          />
         ) : activeTab === 'gebruikers' ? (
-          <UserSummaryScreen normalizedTrips={normalizedTrips} duplicateResult={duplicateResult} />
+          <UserSummaryScreen
+            normalizedTrips={normalizedTrips}
+            duplicateResult={duplicateResult}
+          />
         ) : activeTab === 'periodes' ? (
-          <PeriodSummaryScreen normalizedTrips={normalizedTrips} duplicateResult={duplicateResult} />
+          <PeriodSummaryScreen
+            normalizedTrips={normalizedTrips}
+            duplicateResult={duplicateResult}
+          />
         ) : activeTab === 'klanten' ? (
-          <CustomerProjectScreen normalizedTrips={normalizedTrips} duplicateResult={duplicateResult} />
+          <CustomerProjectScreen
+            normalizedTrips={normalizedTrips}
+            duplicateResult={duplicateResult}
+          />
         ) : activeTab === 'export' ? (
-          <ExportScreen importedFiles={importedFiles} normalizedTrips={normalizedTrips} duplicateResult={duplicateResult} />
+          <ExportScreen
+            importedFiles={importedFiles}
+            normalizedTrips={normalizedTrips}
+            duplicateResult={duplicateResult}
+          />
         ) : (
           <EmptyStatePanel tab={currentTab} />
         )}
