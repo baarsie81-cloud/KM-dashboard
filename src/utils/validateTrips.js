@@ -39,14 +39,6 @@ export function validateTrip(trip, index = 0) {
     warnings.push(`${tripLabel}: id ontbreekt.`);
   }
 
-  if (businessTrip && !hasValue(trip.customer)) {
-    warnings.push(`${tripLabel}: klant ontbreekt bij zakelijke rit.`);
-  }
-
-  if (businessTrip && !hasValue(trip.project)) {
-    warnings.push(`${tripLabel}: project ontbreekt bij zakelijke rit.`);
-  }
-
   if (businessTrip && !hasValue(trip.purpose)) {
     warnings.push(`${tripLabel}: doel ontbreekt bij zakelijke rit.`);
   }
