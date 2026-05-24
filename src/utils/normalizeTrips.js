@@ -46,6 +46,9 @@ export function normalizeTrip(trip, sourceFile, index) {
     sourcePeriodFrom: period.from || '',
     sourcePeriodTo: period.to || '',
     sourceExportedAt: sourceFile.data?.exportedAt || '',
+    sourceTripIndex: index,
+    localCorrection: Boolean(trip.localCorrection),
+    localCorrectionUpdatedAt: trip.localCorrectionUpdatedAt || '',
   };
   const validation = validateTrip(normalizedTrip, index);
 
