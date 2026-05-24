@@ -94,7 +94,7 @@ export default function ControlScreen({ importedFiles, normalizedTrips, duplicat
   const warningFiles = importedFiles.filter((file) => file.status === 'waarschuwing');
   const completeTrips = normalizedTrips.filter((trip) => trip.validationStatus === 'compleet');
   const incompleteTrips = normalizedTrips.filter((trip) => trip.validationStatus === 'incompleet');
-  const warningTrips = normalizedTrips.filter((trip) => trip.validationStatus === 'waarschuwing');
+  const warningTrips = normalizedTrips.filter((trip) => trip.validationWarnings.length > 0);
   const errorTrips = normalizedTrips.filter((trip) => trip.validationStatus === 'fout');
   const filesWithMessages = importedFiles.filter(
     (file) => file.errors.length > 0 || file.warnings.length > 0,

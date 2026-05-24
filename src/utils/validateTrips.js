@@ -8,6 +8,15 @@ function hasPositiveNumber(value) {
   return toNumber(value, 0) > 0;
 }
 
+const requiredCompleteTripFields = [
+  { key: 'date', label: 'datum', hasValue },
+  { key: 'tripType', label: 'type rit', hasValue },
+  { key: 'finalKm', label: 'kilometers', hasValue: hasPositiveNumber },
+  { key: 'mileageRate', label: 'tarief', hasValue },
+  { key: 'startAddress', label: 'startadres', hasValue },
+  { key: 'endAddress', label: 'eindadres', hasValue },
+];
+
 function getExpectedDeductibleAmount(trip) {
   return calculateDeductibleAmount(
     trip.finalKm,
@@ -22,25 +31,12 @@ export function validateTrip(trip, index = 0) {
   const criticalErrors = [];
   const tripLabel = `Rit ${index + 1}`;
   const businessTrip = isBusinessTrip(trip.tripType);
+  const missingCompleteFields = requiredCompleteTripFields.filter((field) => {
+    return !field.hasValue(trip[field.key]);
+  });
 
   if (!hasValue(trip.id)) {
-    criticalErrors.push(`${tripLabel}: id ontbreekt.`);
-  }
-
-  if (!hasValue(trip.date)) {
-    errors.push(`${tripLabel}: datum ontbreekt.`);
-  }
-
-  if (!hasValue(trip.startAddress)) {
-    errors.push(`${tripLabel}: startadres ontbreekt.`);
-  }
-
-  if (!hasValue(trip.endAddress)) {
-    errors.push(`${tripLabel}: eindadres ontbreekt.`);
-  }
-
-  if (businessTrip && !hasValue(trip.purpose)) {
-    errors.push(`${tripLabel}: doel ontbreekt bij zakelijke rit.`);
+    warnings.push(`${tripLabel}: id ontbreekt.`);
   }
 
   if (businessTrip && !hasValue(trip.customer)) {
@@ -51,17 +47,11 @@ export function validateTrip(trip, index = 0) {
     warnings.push(`${tripLabel}: project ontbreekt bij zakelijke rit.`);
   }
 
-  if (businessTrip && !hasPositiveNumber(trip.finalKm)) {
-    errors.push(`${tripLabel}: definitieve kilometers ontbreken of zijn 0.`);
+  if (businessTrip && !hasValue(trip.purpose)) {
+    warnings.push(`${tripLabel}: doel ontbreekt bij zakelijke rit.`);
   }
 
-  if (!hasValue(trip.mileageRate)) {
-    errors.push(`${tripLabel}: kilometertarief ontbreekt.`);
-  }
-
-  if (!hasValue(trip.tripType)) {
-    criticalErrors.push(`${tripLabel}: type rit ontbreekt.`);
-  } else if (!['zakelijk', 'privé', 'prive'].includes(trip.tripType)) {
+  if (hasValue(trip.tripType) && !['zakelijk', 'privé', 'prive'].includes(trip.tripType)) {
     warnings.push(`${tripLabel}: type rit "${trip.tripType}" is onbekend.`);
   }
 
@@ -75,7 +65,7 @@ export function validateTrip(trip, index = 0) {
     if (hasValue(trip.finalKm) && hasValue(trip.mileageRate)) {
       warnings.push(`${tripLabel}: aftrekbaar bedrag ontbrak en is opnieuw berekend.`);
     } else {
-      errors.push(`${tripLabel}: aftrekbaar bedrag ontbreekt en is niet berekenbaar.`);
+      warnings.push(`${tripLabel}: aftrekbaar bedrag ontbreekt en is niet berekenbaar.`);
     }
   } else if (businessTrip && hasValue(trip.finalKm) && hasValue(trip.mileageRate)) {
     const expected = getExpectedDeductibleAmount(trip);
@@ -88,15 +78,18 @@ export function validateTrip(trip, index = 0) {
     }
   }
 
+  if (missingCompleteFields.length > 0) {
+    const labels = missingCompleteFields.map((field) => field.label).join(', ');
+    errors.push(`${tripLabel}: incompleet, mist minimaal: ${labels}.`);
+  }
+
   let validationStatus = 'compleet';
   const allErrors = [...criticalErrors, ...errors];
 
   if (criticalErrors.length > 0) {
     validationStatus = 'fout';
-  } else if (trip.status === 'incompleet' || errors.length > 0) {
+  } else if (errors.length > 0) {
     validationStatus = 'incompleet';
-  } else if (warnings.length > 0) {
-    validationStatus = 'waarschuwing';
   }
 
   return {

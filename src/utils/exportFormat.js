@@ -11,19 +11,12 @@ export const requiredRootFields = [
 ];
 
 export const requiredTripFields = [
-  'id',
-  'userName',
   'date',
   'startAddress',
   'endAddress',
-  'purpose',
   'finalKm',
   'tripType',
   'mileageRate',
-  'deductibleAmount',
-  'status',
-  'createdAt',
-  'updatedAt',
 ];
 
 export function isSupportedExportFile(data) {
@@ -36,6 +29,8 @@ export function isSupportedExportFile(data) {
 }
 
 export const optionalTripFields = [
+  'id',
+  'userName',
   'startTime',
   'endTime',
   'startLat',
@@ -49,5 +44,10 @@ export const optionalTripFields = [
   'calculatedKm',
   'manualKm',
   'returnTrip',
+  'purpose',
+  'deductibleAmount',
+  'status',
+  'createdAt',
+  'updatedAt',
   'note',
 ];
