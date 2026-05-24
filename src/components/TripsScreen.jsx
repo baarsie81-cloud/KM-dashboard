@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { calculateDeductibleAmount, roundCurrency, toNumber } from '../utils/calculations.js';
 import { getMonth, getQuarter, getYear, uniqueValues } from '../utils/exportBuilders.js';
 import {
   defaultTripFilters,
@@ -45,7 +46,127 @@ function getTripDuplicateGroups(trip, duplicateMap) {
   return duplicateMap.get(`${trip.sourceFileName}::${trip.id}::${trip.date}`) ?? [];
 }
 
-function DetailPanel({ trip, duplicateGroups, onClose }) {
+function CorrectionForm({ onCancel, onSave, trip }) {
+  const [formData, setFormData] = useState({
+    date: trip.date || '',
+    startAddress: trip.startAddress || '',
+    endAddress: trip.endAddress || '',
+    customer: trip.customer || '',
+    project: trip.project || '',
+    purpose: trip.purpose || '',
+    tripType: trip.tripType || 'zakelijk',
+    finalKm: trip.finalKm || '',
+    mileageRate: trip.mileageRate || 0.23,
+    status: trip.validationStatus === 'compleet' || trip.validationStatus === 'waarschuwing'
+      ? 'compleet'
+      : trip.status || 'incompleet',
+    note: trip.note || '',
+  });
+  const deductibleAmount = calculateDeductibleAmount(
+    formData.finalKm,
+    formData.mileageRate,
+    formData.tripType,
+  );
+
+  function updateField(key, value) {
+    setFormData((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    onSave({
+      ...formData,
+      finalKm: toNumber(formData.finalKm, 0),
+      mileageRate: toNumber(formData.mileageRate, 0),
+      status: formData.status || 'incompleet',
+    });
+  }
+
+  return (
+    <form className="correction-form" onSubmit={handleSubmit}>
+      <div className="correction-form-heading">
+        <div>
+          <h4>Lokale correctie</h4>
+          <p>
+            Deze wijziging geldt alleen voor deze dashboardsessie en wijzigt het
+            originele JSON-bestand niet.
+          </p>
+        </div>
+        <span className="demo-pill">Tijdelijk</span>
+      </div>
+
+      <div className="correction-grid">
+        <label>
+          Datum
+          <input type="date" value={formData.date} onChange={(event) => updateField('date', event.target.value)} />
+        </label>
+        <label>
+          Type rit
+          <select value={formData.tripType} onChange={(event) => updateField('tripType', event.target.value)}>
+            <option value="zakelijk">Zakelijk</option>
+            <option value="privé">Privé</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select value={formData.status} onChange={(event) => updateField('status', event.target.value)}>
+            <option value="compleet">Compleet</option>
+            <option value="incompleet">Incompleet</option>
+          </select>
+        </label>
+        <label>
+          Kilometers
+          <input type="number" min="0" step="0.1" value={formData.finalKm} onChange={(event) => updateField('finalKm', event.target.value)} />
+        </label>
+        <label>
+          Tarief
+          <input type="number" min="0" step="0.01" value={formData.mileageRate} onChange={(event) => updateField('mileageRate', event.target.value)} />
+        </label>
+        <label>
+          Berekend bedrag
+          <input type="text" value={formatCurrency(roundCurrency(deductibleAmount))} readOnly />
+        </label>
+        <label className="wide-field">
+          Startadres
+          <input type="text" value={formData.startAddress} onChange={(event) => updateField('startAddress', event.target.value)} />
+        </label>
+        <label className="wide-field">
+          Eindadres
+          <input type="text" value={formData.endAddress} onChange={(event) => updateField('endAddress', event.target.value)} />
+        </label>
+        <label>
+          Klant
+          <input type="text" value={formData.customer} onChange={(event) => updateField('customer', event.target.value)} />
+        </label>
+        <label>
+          Project
+          <input type="text" value={formData.project} onChange={(event) => updateField('project', event.target.value)} />
+        </label>
+        <label className="wide-field">
+          Doel
+          <input type="text" value={formData.purpose} onChange={(event) => updateField('purpose', event.target.value)} />
+        </label>
+        <label className="full-field">
+          Notitie
+          <textarea value={formData.note} onChange={(event) => updateField('note', event.target.value)} rows="3" />
+        </label>
+      </div>
+
+      <div className="form-actions">
+        <button className="primary-button" type="submit">
+          Correctie opslaan
+        </button>
+        <button className="secondary-button" type="button" onClick={onCancel}>
+          Annuleren
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DetailPanel({ duplicateGroups, onClose, onCorrectionSaved, trip }) {
+  const [isEditing, setIsEditing] = useState(false);
   const fields = Object.entries(trip).filter(([, value]) => {
     return !Array.isArray(value) && typeof value !== 'object';
   });
@@ -58,11 +179,28 @@ function DetailPanel({ trip, duplicateGroups, onClose }) {
           <p className="eyebrow">Ritdetail</p>
           <h3 id="trip-detail-title">{trip.date || 'Datum onbekend'} - {trip.purpose || 'Geen doel'}</h3>
           <p>{trip.sourceFileName}</p>
+          {trip.localCorrection && <span className="inline-warning">Lokaal gecorrigeerd</span>}
         </div>
-        <button className="secondary-button" type="button" onClick={onClose}>
-          Sluiten
-        </button>
+        <div className="panel-actions">
+          <button className="primary-button" type="button" onClick={() => setIsEditing(true)}>
+            Lokale correctie maken
+          </button>
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Sluiten
+          </button>
+        </div>
       </div>
+
+      {isEditing && (
+        <CorrectionForm
+          trip={trip}
+          onCancel={() => setIsEditing(false)}
+          onSave={(correction) => {
+            onCorrectionSaved(trip, correction);
+            setIsEditing(false);
+          }}
+        />
+      )}
 
       <dl className="detail-grid">
         {fields.map(([key, value]) => (
@@ -112,7 +250,7 @@ function DetailPanel({ trip, duplicateGroups, onClose }) {
   );
 }
 
-export default function TripsScreen({ normalizedTrips, duplicateResult }) {
+export default function TripsScreen({ normalizedTrips, duplicateResult, onTripCorrectionSaved }) {
   const [filters, setFilters] = useState(defaultTripFilters);
   const [sortConfig, setSortConfig] = useState({ by: 'datum', direction: 'desc' });
   const [selectedTripKey, setSelectedTripKey] = useState('');
@@ -273,30 +411,78 @@ export default function TripsScreen({ normalizedTrips, duplicateResult }) {
             <tr>
               <th><button type="button" onClick={() => handleSort('gebruiker')}>{renderSortLabel('Gebruiker', 'gebruiker')}</button></th>
               <th><button type="button" onClick={() => handleSort('datum')}>{renderSortLabel('Datum', 'datum')}</button></th>
-              <th>Starttijd</th><th>Eindtijd</th><th>Startadres</th><th>Eindadres</th><th>Klant</th><th>Project</th><th>Doel</th><th>Type rit</th>
+              <th>Starttijd</th>
+              <th>Eindtijd</th>
+              <th>Startadres</th>
+              <th>Eindadres</th>
+              <th>Klant</th>
+              <th>Project</th>
+              <th>Doel</th>
+              <th>Type rit</th>
               <th><button type="button" onClick={() => handleSort('kilometers')}>{renderSortLabel('Kilometers', 'kilometers')}</button></th>
               <th>Tarief</th>
               <th><button type="button" onClick={() => handleSort('bedrag')}>{renderSortLabel('Bedrag', 'bedrag')}</button></th>
-              <th>Status</th><th>Bronbestand</th>
+              <th>Status</th>
+              <th>Bronbestand</th>
             </tr>
           </thead>
           <tbody>
-            {filteredTrips.length === 0 ? <tr><td colSpan="15">Geen ritten gevonden met deze filters.</td></tr> : filteredTrips.map((trip, index) => {
-              const rowKey = `${trip.sourceFileName}-${trip.id}-${index}`;
-              const duplicateGroups = getTripDuplicateGroups(trip, duplicateMap);
-              return (
-                <tr className={selectedTripKey === rowKey ? 'selected-row' : ''} key={rowKey} onClick={() => setSelectedTripKey(rowKey)}>
-                  <td>{trip.sourceUserName || trip.userName || 'Onbekend'}</td><td>{trip.date || '-'}</td><td>{trip.startTime || '-'}</td><td>{trip.endTime || '-'}</td><td>{trip.startAddress || '-'}</td><td>{trip.endAddress || '-'}</td><td>{trip.customer || '-'}</td><td>{trip.project || '-'}</td><td>{trip.purpose || '-'}</td><td>{trip.tripType || '-'}</td><td>{formatKm(trip.finalKm)} km</td><td>{formatCurrency(trip.mileageRate)}</td><td>{formatCurrency(trip.deductibleAmount)}</td>
-                  <td><span className={`status-pill status-${trip.validationStatus}`}>{statusLabels[trip.validationStatus] || trip.validationStatus}</span>{duplicateGroups.length > 0 && <span className="inline-warning">Dubbel?</span>}</td>
-                  <td>{trip.sourceFileName}</td>
-                </tr>
-              );
-            })}
+            {filteredTrips.length === 0 ? (
+              <tr>
+                <td colSpan="15">Geen ritten gevonden met deze filters.</td>
+              </tr>
+            ) : (
+              filteredTrips.map((trip, index) => {
+                const rowKey = `${trip.sourceFileName}-${trip.id}-${index}`;
+                const duplicateGroups = getTripDuplicateGroups(trip, duplicateMap);
+
+                return (
+                  <tr
+                    className={selectedTripKey === rowKey ? 'selected-row' : ''}
+                    key={rowKey}
+                    onClick={() => setSelectedTripKey(rowKey)}
+                  >
+                    <td>{trip.sourceUserName || trip.userName || 'Onbekend'}</td>
+                    <td>{trip.date || '-'}</td>
+                    <td>{trip.startTime || '-'}</td>
+                    <td>{trip.endTime || '-'}</td>
+                    <td>{trip.startAddress || '-'}</td>
+                    <td>{trip.endAddress || '-'}</td>
+                    <td>{trip.customer || '-'}</td>
+                    <td>{trip.project || '-'}</td>
+                    <td>{trip.purpose || '-'}</td>
+                    <td>{trip.tripType || '-'}</td>
+                    <td>{formatKm(trip.finalKm)} km</td>
+                    <td>{formatCurrency(trip.mileageRate)}</td>
+                    <td>{formatCurrency(trip.deductibleAmount)}</td>
+                    <td>
+                      <span className={`status-pill status-${trip.validationStatus}`}>
+                        {statusLabels[trip.validationStatus] || trip.validationStatus}
+                      </span>
+                      {trip.localCorrection && (
+                        <span className="inline-warning">Gecorrigeerd</span>
+                      )}
+                      {duplicateGroups.length > 0 && (
+                        <span className="inline-warning">Dubbel?</span>
+                      )}
+                    </td>
+                    <td>{trip.sourceFileName}</td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
 
-      {selectedTrip && <DetailPanel trip={selectedTrip} duplicateGroups={getTripDuplicateGroups(selectedTrip, duplicateMap)} onClose={() => setSelectedTripKey('')} />}
+      {selectedTrip && (
+        <DetailPanel
+          trip={selectedTrip}
+          duplicateGroups={getTripDuplicateGroups(selectedTrip, duplicateMap)}
+          onClose={() => setSelectedTripKey('')}
+          onCorrectionSaved={onTripCorrectionSaved}
+        />
+      )}
     </section>
   );
 }
